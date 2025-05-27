@@ -1,0 +1,106 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Provably Fair Coin Flip</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 500px;
+      margin: 40px auto;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    }
+    button {
+      margin-top: 20px;
+      padding: 12px 24px;
+      font-size: 18px;
+      border: none;
+      background: #007bff;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .coin {
+      font-size: 48px;
+      text-align: center;
+      animation: flip 0.6s ease-in-out;
+    }
+    @keyframes flip {
+      0%   { transform: rotateY(0); opacity: 0.5; }
+      50%  { transform: rotateY(180deg); opacity: 1; }
+      100% { transform: rotateY(360deg); opacity: 0.8; }
+    }
+    .result {
+      margin-top: 20px;
+      background: #f9f9f9;
+      padding: 12px;
+      border-left: 4px solid #007bff;
+    }
+    code {
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <h2>Provably Fair Coin Flip</h2>
+
+  <button onclick="flipCoin()">🎲 Flip Coin</button>
+
+  <div id="coinResult" class="coin"></div>
+  <div id="output" class="result"></div>
+
+  <script>
+    async function sha256Hex(input) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(input);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(hashBuffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+
+    async function generateFairResult(serverSeed, randomSeed) {
+      const inputData = new TextEncoder().encode(`${serverSeed}-${randomSeed}`);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', inputData);
+      const hashHex = Array.from(new Uint8Array(hashBuffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      return parseInt(hashHex.slice(0, 8), 16) / Math.pow(16, 8);
+    }
+
+    function decideWinner(normalized, starter, joiner) {
+      return normalized < starter / (starter + joiner) ? 'Heads' : 'Tails';
+    }
+
+    async function flipCoin() {
+      const starterValue = 50;
+      const joinerValue = 50;
+
+      const serverSeed = crypto.randomUUID();
+      const randomSeed = crypto.randomUUID();
+
+      const normalized = await generateFairResult(serverSeed, randomSeed);
+      const winner = decideWinner(normalized, starterValue, joinerValue);
+      const serverHash = await sha256Hex(serverSeed);
+
+      const coinDiv = document.getElementById('coinResult');
+      coinDiv.innerHTML = '';
+      coinDiv.style.animation = 'none';
+      void coinDiv.offsetWidth;
+      coinDiv.style.animation = '';
+      coinDiv.innerHTML = winner === 'Heads' ? '🪙 Heads' : '🪙 Tails';
+
+      document.getElementById('output').innerHTML = `
+        <strong>Winner:</strong> ${winner}<br>
+        <strong>Normalized Value:</strong> ${normalized.toFixed(10)}<br><br>
+        <strong>Server Seed:</strong><br><code>${serverSeed}</code><br><br>
+        <strong>Random Seed:</strong><br><code>${randomSeed}</code><br><br>
+        <strong>Server Seed Hash:</strong><br><code>${serverHash}</code>
+      `;
+    }
+  </script>
+</body>
+</html>
